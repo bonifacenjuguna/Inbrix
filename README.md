@@ -26,9 +26,50 @@ a project (or use an existing one).
 ### 1.3 OAuth consent screen
 **APIs & Services → OAuth consent screen**
 - User type: External (Internal only works if you're on Google Workspace)
-- Add your own Gmail address as a **test user** (since this app stays
-  unverified — it's just for you, verification isn't worth pursuing)
+- Add your own Gmail address as a **test user** (fine to start; see the
+  Publishing note below for the permanent fix to the 7-day token expiry)
 - Scope: `.../auth/gmail.readonly` is all v1 needs
+
+**Publishing (removes the 7-day refresh-token expiry):** while this app
+stays in **Testing** mode, Google expires refresh tokens after 7 days no
+matter what. Switching to **Production** removes that limit entirely —
+and since `gmail.readonly` is unverified-but-not-restricted, this doesn't
+require Google's review process, just a one-time click:
+
+1. **OAuth consent screen → Branding** — fill in the required fields:
+   App name, User support email, Developer contact email, **Homepage URL**,
+   **Privacy Policy URL**, **Terms of Service URL**. Once deployed (§3),
+   your app already serves all three:
+   - Homepage URL: `{PUBLIC_BASE_URL}/`
+   - Privacy Policy URL: `{PUBLIC_BASE_URL}/privacy`
+   - Terms of Service URL: `{PUBLIC_BASE_URL}/terms`
+   (All three are genuinely accurate — they plainly state this is a
+   private, single-user bot with no other users and no data shared with
+   anyone.)
+
+   **Authorized domains:** enter just the base domain of your
+   `PUBLIC_BASE_URL` — e.g. for
+   `https://inbrix-bot-production.up.railway.app`, enter
+   `up.railway.app` first; if Google rejects that and asks you to verify
+   a "top private domain" you don't own, enter the **full subdomain
+   instead** (`inbrix-bot-production.up.railway.app`) — Railway's shared
+   domain is registered on the public suffix list specifically so
+   individual app subdomains can be authorized this way without owning
+   `railway.app` itself. If neither is accepted (`*.up.railway.app` has
+   had reported acceptance issues in Google Cloud Console — a
+   [known recent report](https://station.railway.com/questions/unable-to-create-o-auth-2-0-client-id-wit-b1c0fd0b)),
+   the reliable fix is a
+   [Railway custom domain](https://docs.railway.com/guides/public-networking#custom-domains)
+   you actually own — then that domain goes everywhere (Homepage,
+   Privacy, Terms, redirect URI, Authorized domains) instead.
+2. **OAuth consent screen → Audience** (or the main overview page) →
+   **Publish App** → confirm.
+3. Re-run your refresh token flow (§2 or §2-alt) once more after
+   publishing and update `GOOGLE_REFRESH_TOKEN` in Railway — a token minted
+   while still in Testing may carry the old 7-day limit.
+4. You'll now see a "Google hasn't verified this app" click-through on the
+   consent screen — expected and harmless, since you're the only person
+   who'll ever see it.
 
 ### 1.4 OAuth Client credentials
 **APIs & Services → Credentials → Create Credentials → OAuth client ID**
@@ -38,6 +79,20 @@ a project (or use an existing one).
   want a different port)
 - Save the **Client ID** and **Client Secret** — these are your
   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+
+**One domain only, always.** Earlier drafts of this README suggested a
+separate `get-refresh-token-prod.js` helper deployed as its *own* Railway
+service with its *own* domain — don't do that anymore. It meant two
+different domains to authorize (your main bot's, and the helper's), and
+Railway's shared `*.up.railway.app` subdomains have had reported issues
+being accepted at all in Google Cloud Console's domain fields. Use the
+**built-in `/reauth` route on your main app instead** (§2-alt below) — it
+runs on the exact same domain as everything else, so there is only ever
+**one domain** to add anywhere: your main bot's Railway URL. Add both of
+these to this same OAuth Client:
+- Authorized redirect URIs: `{PUBLIC_BASE_URL}/oauth2callback`
+- (Authorized domains, on the Branding page, only ever needs your main
+  bot's domain too — see the Publishing note there.)
 
 ### 1.5 (Optional, for push) Cloud Pub/Sub
 Real-time delivery needs a Pub/Sub topic and a permission grant — full
@@ -68,45 +123,30 @@ only ever do this once per token; refresh tokens don't expire on their own
 (unless you revoke access, or your OAuth consent screen is still in
 **Testing** mode — see the note at the end of the next section).
 
-### 2-alt. Get it via a deployed Railway service instead (no local machine needed)
+### 2-alt. Get it via the bot's own live URL instead (no local machine needed, one domain only)
 
-If running things locally isn't convenient, deploy
-`scripts/get-refresh-token-prod.js` as its **own temporary Railway service**
-instead — it generates the token through a live public URL rather than
-`localhost`.
+If running things locally isn't convenient, use the **built-in `/reauth`
+route already in `src/server/app.js`** — it runs on your main bot's
+existing domain, so there's no second domain to authorize anywhere.
 
-**Google Cloud Console — add these to your OAuth client, specifically for
-this helper's URL:**
-
-1. **APIs & Services → Credentials → your OAuth Client**
-2. **Authorized JavaScript origins** → Add URI:
+1. **Add the redirect URI to your OAuth Client** (Cloud Console →
+   Credentials → your OAuth Client → Authorized redirect URIs):
    ```
-   https://inbrix-oauth-helper.up.railway.app
+   https://your-app.up.railway.app/oauth2callback
    ```
-   (your helper service's actual Railway URL — no path, no trailing slash)
-3. **Authorized redirect URIs** → Add URI:
-   ```
-   https://inbrix-oauth-helper.up.railway.app/oauth2callback
-   ```
-   (same domain, must end in exactly `/oauth2callback` to match the script)
-4. Save.
-
-**Deploy the helper:**
-1. New Railway service, same repo, but override the **start command** to:
-   ```
-   node scripts/get-refresh-token-prod.js
-   ```
-2. Env vars on **this helper service only**: `GOOGLE_CLIENT_ID`,
-   `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` set to the exact
-   `https://.../oauth2callback` URL from step 3 above. It needs nothing
-   else — no Postgres, no Redis, no Telegram token.
-3. Deploy, then visit the service's root URL in your browser. Approve
-   access → it prints your `GOOGLE_REFRESH_TOKEN` on the page (and in logs).
-4. Copy that value into your **main bot service's** env vars (not this
-   helper's), then redeploy the main service.
-5. **Tear this helper service down** — remove its domain or delete the
-   service entirely. It's a live credential-issuing endpoint; it has no
-   reason to stay online once you have the token.
+   (your actual main bot domain — same one already used for Homepage/
+   Privacy/Terms in §1.4/§1.3)
+2. **Set two env vars** on your main bot service and redeploy:
+   - `PUBLIC_BASE_URL` = `https://your-app.up.railway.app` (no trailing slash)
+   - `OAUTH_HELPER_SECRET` = any random string (e.g. `openssl rand -hex 16`)
+     — this route is a 404 to everyone until this is set, and checked again
+     on every request
+3. Visit `https://your-app.up.railway.app/reauth?secret=<that string>` in
+   your browser. Approve access → it prints your new
+   `GOOGLE_REFRESH_TOKEN` on the page.
+4. Update `GOOGLE_REFRESH_TOKEN` in Railway with that value, redeploy.
+5. **Unset `OAUTH_HELPER_SECRET`** afterward to close the route again —
+   it's a credential-issuing endpoint, no reason to leave it reachable.
 
 > **Testing-mode expiry:** while your OAuth consent screen is still in
 > **Testing** (Google Cloud Console → OAuth consent screen), Google expires

@@ -1,4 +1,10 @@
 /**
+ * DEPRECATED — kept only for reference. Deploying this as its own Railway
+ * service means a second domain to authorize in Google Cloud Console,
+ * which is exactly the multi-domain headache the built-in /reauth route
+ * (see src/server/app.js) avoids by running on the main bot's own domain.
+ * Prefer README §2-alt instead.
+ *
  * PRODUCTION-STYLE refresh token helper — deploy THIS as its own temporary
  * Railway service (or override your main service's start command to run
  * this instead, deploy once, then switch back) when you can't easily run

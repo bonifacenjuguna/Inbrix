@@ -36,6 +36,12 @@ const config = {
   GOOGLE_REFRESH_TOKEN: required('GOOGLE_REFRESH_TOKEN'),
   GOOGLE_REDIRECT_URI: optional('GOOGLE_REDIRECT_URI', 'http://localhost:53682/oauth2callback'),
 
+  // Gates the optional built-in /reauth + /oauth2callback routes on the
+  // main app (see server/app.js). Leave unset to keep those routes fully
+  // disabled (404) — only set this when you actually need to mint a new
+  // refresh token, then you can leave it set or unset it again afterward.
+  OAUTH_HELPER_SECRET: optional('OAUTH_HELPER_SECRET', ''),
+
   // Push is optional-at-boot — the bot runs fine on polling alone if Pub/Sub
   // isn't wired up yet, and logs a clear one-time warning instead of crashing.
   GOOGLE_PUBSUB_TOPIC: optional('GOOGLE_PUBSUB_TOPIC', ''),
@@ -49,7 +55,7 @@ const config = {
   WATCHDOG_INTERVAL_MS: optionalInt('WATCHDOG_INTERVAL_MS', 300000),
   WATCHDOG_STALL_THRESHOLD_MS: optionalInt('WATCHDOG_STALL_THRESHOLD_MS', 600000),
   PORT: optionalInt('PORT', 3000),
-  BOT_VERSION: optional('BOT_VERSION', '0.1.4'),
+  BOT_VERSION: optional('BOT_VERSION', '0.1.7'),
 
   GMAIL_SCOPES: ['https://www.googleapis.com/auth/gmail.readonly'],
 };
