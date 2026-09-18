@@ -74,8 +74,58 @@ GOOGLE_REFRESH_TOKEN=1//0g...
 ```
 
 Copy that value — you'll paste it into Railway's env vars in step 3. You
-only ever do this once; refresh tokens don't expire on their own (unless
-you revoke access from your Google Account settings).
+only ever do this once per token; refresh tokens don't expire on their own
+(unless you revoke access, or your OAuth consent screen is still in
+**Testing** mode — see the note at the end of the next section).
+
+### 2-alt. Get it via a deployed Railway service instead (no local machine needed)
+
+If running things locally isn't convenient, deploy
+`scripts/get-refresh-token-prod.js` as its **own temporary Railway service**
+instead — it generates the token through a live public URL rather than
+`localhost`.
+
+**Google Cloud Console — add these to your OAuth client, specifically for
+this helper's URL:**
+
+1. **APIs & Services → Credentials → your OAuth Client**
+2. **Authorized JavaScript origins** → Add URI:
+   ```
+   https://inbrix-oauth-helper.up.railway.app
+   ```
+   (your helper service's actual Railway URL — no path, no trailing slash)
+3. **Authorized redirect URIs** → Add URI:
+   ```
+   https://inbrix-oauth-helper.up.railway.app/oauth2callback
+   ```
+   (same domain, must end in exactly `/oauth2callback` to match the script)
+4. Save.
+
+**Deploy the helper:**
+1. New Railway service, same repo, but override the **start command** to:
+   ```
+   node scripts/get-refresh-token-prod.js
+   ```
+2. Env vars on **this helper service only**: `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` set to the exact
+   `https://.../oauth2callback` URL from step 3 above. It needs nothing
+   else — no Postgres, no Redis, no Telegram token.
+3. Deploy, then visit the service's root URL in your browser. Approve
+   access → it prints your `GOOGLE_REFRESH_TOKEN` on the page (and in logs).
+4. Copy that value into your **main bot service's** env vars (not this
+   helper's), then redeploy the main service.
+5. **Tear this helper service down** — remove its domain or delete the
+   service entirely. It's a live credential-issuing endpoint; it has no
+   reason to stay online once you have the token.
+
+> **Testing-mode expiry:** while your OAuth consent screen is still in
+> **Testing** (Google Cloud Console → OAuth consent screen), Google expires
+> refresh tokens after 7 days regardless of activity. Either re-run this
+> flow weekly, or click **Publish App** on the consent screen once you're
+> past initial testing — for an unverified personal app with a sensitive
+> scope, this doesn't require Google's review, it just shows a "Google
+> hasn't verified this app" click-through, which is fine since you're the
+> only one who'll ever see it.
 
 ---
 

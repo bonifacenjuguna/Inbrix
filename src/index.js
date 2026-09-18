@@ -28,8 +28,15 @@ async function main() {
     logger.info(`HTTP server listening`, { port: config.PORT });
   });
 
-  await bot.launch();
-  logger.info('Telegram bot launched (long polling)');
+  bot.launch().catch((err) => {
+    logger.error('Telegram bot crashed', { error: err.message });
+    process.exit(1);
+  });
+  // NOTE: bot.launch() does NOT resolve when the bot starts — by Telegraf's
+  // own design, its promise only resolves once the bot stops (bot.stop()).
+  // Awaiting it here would block every line below forever, including the
+  // very jobs that make automatic polling work. Fire-and-forget is correct.
+  logger.info('Telegram bot launching (long polling)');
 
   const stopPolling = startPolling(bot);
   const stopWatchRenewal = startWatchRenewal();

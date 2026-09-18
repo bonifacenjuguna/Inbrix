@@ -1,6 +1,6 @@
 {
   "name": "inbrix-bot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inbrix — owner-only Telegram bot that forwards Gmail into Telegram (poll + push together).",
   "private": true,
   "main": "src/index.js",
@@ -9,6 +9,7 @@
     "migrate": "node src/db/migrate.js",
     "smoke-test": "node scripts/smoke-test.js",
     "get-refresh-token": "node scripts/get-refresh-token.js",
+    "get-refresh-token-prod": "node scripts/get-refresh-token-prod.js",
     "setup-watch": "node scripts/setup-gmail-watch.js"
   },
   "engines": {

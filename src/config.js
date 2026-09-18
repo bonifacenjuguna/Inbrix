@@ -49,7 +49,7 @@ const config = {
   WATCHDOG_INTERVAL_MS: optionalInt('WATCHDOG_INTERVAL_MS', 300000),
   WATCHDOG_STALL_THRESHOLD_MS: optionalInt('WATCHDOG_STALL_THRESHOLD_MS', 600000),
   PORT: optionalInt('PORT', 3000),
-  BOT_VERSION: optional('BOT_VERSION', '0.1.0'),
+  BOT_VERSION: optional('BOT_VERSION', '0.1.1'),
 
   GMAIL_SCOPES: ['https://www.googleapis.com/auth/gmail.readonly'],
 };
