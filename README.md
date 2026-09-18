@@ -39,21 +39,11 @@ a project (or use an existing one).
 - Save the **Client ID** and **Client Secret** — these are your
   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
 
-### 1.5 (Optional, for push) Create a Pub/Sub topic
-**Pub/Sub → Topics → Create Topic** — name it e.g. `gmail-notifications`.
-Full resource name looks like:
-```
-projects/YOUR_PROJECT_ID/topics/gmail-notifications
-```
-That full string is your `GOOGLE_PUBSUB_TOPIC`.
-
-Then **grant Gmail permission to publish to it**:
-- Open the topic → **Permissions** → **Add Principal**
-- Principal: `gmail-api-push@system.gserviceaccount.com`
-- Role: **Pub/Sub Publisher**
-
-You'll create the actual **push subscription** (pointing at your Railway
-URL) *after* you deploy, in step 3 — you need the live URL first.
+### 1.5 (Optional, for push) Cloud Pub/Sub
+Real-time delivery needs a Pub/Sub topic and a permission grant — full
+walkthrough is in **§4. Set up Gmail Push**, once your bot is already
+deployed and you have a live URL to point it at. Nothing to do here yet;
+skip ahead to §2 if you just want the bot running on polling first.
 
 ---
 
@@ -142,42 +132,98 @@ this helper's URL:**
    - `TELEGRAM_OWNER_ID` — your numeric Telegram user id (get it from
      [@userinfobot](https://t.me/userinfobot))
    - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
-   - `GOOGLE_PUBSUB_TOPIC` (if using push)
-   - `GOOGLE_PUBSUB_VERIFICATION_TOKEN` — make up any random string, e.g.
-     `openssl rand -hex 16`
-   - `PUBLIC_BASE_URL` — after your first deploy, Railway gives you a URL
-     like `https://inbrix-bot-production.up.railway.app` — set that here
-     and redeploy so the log line in step 3.6 prints the right webhook URL
+   - `POLL_INTERVAL_MS` — safe to drop to `10000` (10s) or lower; it's a
+     single-user bot, nowhere near Gmail's API quota. Once push (§4) is
+     live, this becomes just a safety net and can go back up if you want.
 5. Deploy. Check the logs — you should see:
    ```
    Database schema is up to date
    Gmail auth OK { emailAddress: 'you@gmail.com' }
-   Telegram bot launched (long polling)
+   Telegram bot launching (long polling)
    Polling started
    ```
-6. **(Optional, for push)** If `PUBLIC_BASE_URL` and `GOOGLE_PUBSUB_TOPIC`
-   are both set, the logs print the exact webhook URL to use, e.g.:
-   ```
-   Gmail Pub/Sub push endpoint (paste into your Cloud Pub/Sub push subscription)
-   url: 'https://your-app.up.railway.app/gmail/webhook?token=abc123'
-   ```
-   Go back to **Cloud Console → Pub/Sub → your topic → Subscriptions →
-   Create Subscription**:
-   - Delivery type: **Push**
-   - Endpoint URL: paste the URL from the logs above
-   - Create it — Gmail will now hit that URL the moment new mail arrives.
-   - The app registers/renews the actual `watch()` call automatically
-     (see `src/jobs/watchRenewal.js`), but you can trigger it manually any
-     time with `npm run setup-watch`.
-
-7. **Run the smoke test** to confirm everything's actually wired up
+6. **Run the smoke test** to confirm everything's actually wired up
    (from your local machine, pointed at Railway's env, or via Railway's
    shell):
    ```bash
    npm run smoke-test
    ```
+7. Message your bot on Telegram: `/start`.
 
-8. Message your bot on Telegram: `/start`.
+Working on polling alone at this point is a completely valid place to stop
+— §4 below is optional, for when you want real-time instead of a ~10-45s
+delay.
+
+---
+
+## 4. Set up Gmail Push (real-time delivery)
+
+Polling means "check every N seconds." Push means Gmail *tells* the bot
+the instant new mail lands — typically 1–3 seconds instead of waiting on
+the poll timer. Do this once your bot is already deployed from §3, since
+you need its live URL.
+
+**4.1 Enable the API** (if you skipped it in §1.2): Cloud Console →
+**APIs & Services → Library** → enable **Cloud Pub/Sub API**.
+
+**4.2 Create the topic:** Pub/Sub → Topics → **Create Topic**
+- Topic ID: `gmail-notifications` (or anything you like)
+- Leave **Add a default subscription** checked, everything else
+  (schema, ingestion, message retention, BigQuery, backup, Cloud KMS)
+  unchecked/default
+- Click **Create**
+
+Note the full topic name shown under the Topic ID field, e.g.:
+```
+projects/YOUR_PROJECT_ID/topics/gmail-notifications
+```
+That full string is your `GOOGLE_PUBSUB_TOPIC`.
+
+**4.3 Grant Gmail permission to publish to it** — this is the step that's
+easy to miss and causes push to silently never fire:
+- Open the topic → **Permissions** tab → **+ Add principal**
+- New principals: `gmail-api-push@system.gserviceaccount.com`
+- Role: **Pub/Sub Publisher**
+- **Save**
+
+**4.4 Set three more env vars** on your bot service in Railway, then
+redeploy:
+- `GOOGLE_PUBSUB_TOPIC` — the full topic name from 4.2
+- `PUBLIC_BASE_URL` — your bot's live Railway URL, e.g.
+  `https://inbrix-bot-production.up.railway.app` (no trailing slash)
+- `GOOGLE_PUBSUB_VERIFICATION_TOKEN` — any random string, e.g. the output
+  of `openssl rand -hex 16` — this stops random internet traffic from
+  triggering a fake "new mail" event on your webhook
+
+**4.5 Grab the webhook URL from the boot logs.** With all three vars set,
+redeploying prints:
+```
+Gmail Pub/Sub push endpoint (paste into your Cloud Pub/Sub push subscription)
+url: 'https://inbrix-bot-production.up.railway.app/gmail/webhook?token=abc123...'
+```
+Copy that whole URL, token included.
+
+**4.6 Create the push subscription:** back in Cloud Console → your
+`gmail-notifications` topic → **Subscriptions** tab → **Create Subscription**
+- Delivery type: **Push**
+- Endpoint URL: paste the URL from 4.5
+- Create it
+
+**4.7 Confirm it's live.** The app auto-registers/renews the Gmail
+`watch()` call on its own the moment `GOOGLE_PUBSUB_TOPIC` is set (see
+`src/jobs/watchRenewal.js`) — no manual step needed — but you can double
+check via Railway's shell:
+```bash
+npm run setup-watch
+```
+Should print an expiration date about 7 days out. The app renews this
+automatically every day going forward, well before it expires.
+
+**4.8 Test it.** Send yourself an email — it should land in Telegram
+within a couple of seconds instead of waiting on the poll timer. Check
+`/status` occasionally over the first week or two to confirm the daily
+watch-renewal job is actually firing (`🔔 Push — last: Xm ago` should keep
+updating) before trusting it fully unattended.
 
 ---
 

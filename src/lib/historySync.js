@@ -19,14 +19,14 @@ let syncing = false;
  */
 async function sync(source, telegram) {
   if (syncing) {
-    logger.debug('Sync already in progress, skipping this trigger', { source });
+    logger.info('Sync already in progress, skipping this trigger', { source });
     return { skipped: true };
   }
   syncing = true;
   try {
     const paused = await state.isPaused();
     if (paused) {
-      logger.debug('Bot is paused, skipping sync', { source });
+      logger.info('Skipping sync — bot is paused (send /resume to re-enable)', { source });
       return { skipped: true, paused: true };
     }
 
