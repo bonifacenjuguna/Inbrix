@@ -10,6 +10,35 @@ const { startWatchRenewal } = require('./jobs/watchRenewal');
 const { startWatchdog } = require('./jobs/watchdog');
 const gmailAuth = require('./lib/gmailAuth');
 
+/**
+ * A 409 "Conflict: terminated by other getUpdates request" almost never
+ * means two real services are fighting over the token — it usually means
+ * THIS SAME process's previous crash didn't give Telegram's server time to
+ * release its old long-poll session before Railway restarted the container.
+ * Exiting immediately on that error (the old behavior) made Railway restart
+ * within a couple of seconds, which collided with the still-active old
+ * session again — a self-inflicted crash loop. Backing off first, instead
+ * of crashing instantly, lets that stale session expire on its own.
+ */
+function launchBot(bot, attempt = 1) {
+  const MAX_ATTEMPTS = 6;
+  bot.launch().catch((err) => {
+    const isConflict = /409/.test(err.message) && /Conflict/i.test(err.message);
+    if (isConflict && attempt < MAX_ATTEMPTS) {
+      const delayMs = 15000 * attempt; // 15s, 30s, 45s, 60s, 75s
+      logger.warn(
+        `Telegram getUpdates conflict (attempt ${attempt}/${MAX_ATTEMPTS}) — ` +
+          `retrying in ${delayMs / 1000}s instead of crash-looping`,
+        { error: err.message }
+      );
+      setTimeout(() => launchBot(bot, attempt + 1), delayMs);
+      return;
+    }
+    logger.error('Telegram bot crashed', { error: err.message, attempt });
+    process.exit(1);
+  });
+}
+
 async function main() {
   logger.info(`Inbrix v${config.BOT_VERSION} starting…`);
 
@@ -28,10 +57,7 @@ async function main() {
     logger.info(`HTTP server listening`, { port: config.PORT });
   });
 
-  bot.launch().catch((err) => {
-    logger.error('Telegram bot crashed', { error: err.message });
-    process.exit(1);
-  });
+  launchBot(bot);
   // NOTE: bot.launch() does NOT resolve when the bot starts — by Telegraf's
   // own design, its promise only resolves once the bot stops (bot.stop()).
   // Awaiting it here would block every line below forever, including the
