@@ -62,6 +62,30 @@ require Google's review process, just a one-time click:
    [Railway custom domain](https://docs.railway.com/guides/public-networking#custom-domains)
    you actually own — then that domain goes everywhere (Homepage,
    Privacy, Terms, redirect URI, Authorized domains) instead.
+
+   **"This URL isn't registered to you" on Homepage/domain verification:**
+   Google won't take your word for it that you control a domain it doesn't
+   already trust — a shared Railway subdomain isn't automatically trusted.
+   Since your app fully controls everything served at its own URL, you can
+   prove ownership through **Google Search Console** without owning the
+   root `railway.app` domain:
+   1. Go to [Search Console](https://search.google.com/search-console) →
+      **Add property** → choose **URL prefix** (not "Domain") → enter
+      `{PUBLIC_BASE_URL}/` exactly
+   2. Pick a verification method — either works with this app:
+      - **HTML tag**: copy the `content="..."` value it gives you → set
+        env var `GOOGLE_SITE_VERIFICATION` to that value → redeploy → the
+        tag now appears on every page (`src/server/app.js` injects it
+        automatically) → click **Verify** in Search Console
+      - **HTML file**: copy the exact filename (e.g.
+        `google1234567890abcdef.html`) and its exact file content → set
+        `GOOGLE_SITE_VERIFICATION_FILENAME` and
+        `GOOGLE_SITE_VERIFICATION_FILE_CONTENT` → redeploy → the app now
+        serves that file at that exact path → click **Verify**
+   3. Once Search Console shows it verified, go back to Cloud Console —
+      Homepage URL and Authorized domains should now be accepted, since
+      Google Cloud checks domain ownership against the same Google
+      account's verified Search Console properties.
 2. **OAuth consent screen → Audience** (or the main overview page) →
    **Publish App** → confirm.
 3. Re-run your refresh token flow (§2 or §2-alt) once more after

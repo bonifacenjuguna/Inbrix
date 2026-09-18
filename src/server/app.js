@@ -5,13 +5,18 @@ const logger = require('../lib/logger');
 const historySync = require('../lib/historySync');
 
 /** Bare-bones, dependency-free HTML wrapper — no styling frameworks needed
- * for two static informational pages. */
+ * for two static informational pages. Injects the Google Search Console
+ * "HTML tag" verification meta tag when GOOGLE_SITE_VERIFICATION is set. */
 function renderPage(title, bodyHtml) {
+  const verificationMeta = config.GOOGLE_SITE_VERIFICATION
+    ? `<meta name="google-site-verification" content="${config.GOOGLE_SITE_VERIFICATION}">`
+    : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  ${verificationMeta}
   <title>${title}</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #222; }
@@ -28,6 +33,18 @@ function createServer(bot) {
   app.use(express.json());
 
   app.get('/health', (req, res) => res.status(200).json({ ok: true }));
+
+  /**
+   * Google Search Console "HTML file" verification method — an alternative
+   * to the meta-tag method above. Google gives you a filename like
+   * google1234567890abcdef.html and exact file content to serve at that
+   * exact path. Only registered if both env vars are set.
+   */
+  if (config.GOOGLE_SITE_VERIFICATION_FILENAME && config.GOOGLE_SITE_VERIFICATION_FILE_CONTENT) {
+    app.get(`/${config.GOOGLE_SITE_VERIFICATION_FILENAME}`, (req, res) => {
+      res.status(200).type('text/html').send(config.GOOGLE_SITE_VERIFICATION_FILE_CONTENT);
+    });
+  }
 
   /**
    * Homepage + Privacy Policy — Google's OAuth consent screen requires both

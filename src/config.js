@@ -48,6 +48,14 @@ const config = {
   GOOGLE_PUBSUB_VERIFICATION_TOKEN: optional('GOOGLE_PUBSUB_VERIFICATION_TOKEN', ''),
   PUBLIC_BASE_URL: optional('PUBLIC_BASE_URL', ''),
 
+  // Google Search Console domain-ownership verification — needed because
+  // Google Cloud Console won't accept a Homepage/Authorized domain it
+  // can't confirm you control, and a shared Railway subdomain isn't
+  // automatically trusted. Set whichever method Search Console offers you.
+  GOOGLE_SITE_VERIFICATION: optional('GOOGLE_SITE_VERIFICATION', ''), // "HTML tag" method: just the content value
+  GOOGLE_SITE_VERIFICATION_FILENAME: optional('GOOGLE_SITE_VERIFICATION_FILENAME', ''), // "HTML file" method
+  GOOGLE_SITE_VERIFICATION_FILE_CONTENT: optional('GOOGLE_SITE_VERIFICATION_FILE_CONTENT', ''),
+
   DATABASE_URL: required('DATABASE_URL'),
   REDIS_URL: required('REDIS_URL'),
 
@@ -55,7 +63,7 @@ const config = {
   WATCHDOG_INTERVAL_MS: optionalInt('WATCHDOG_INTERVAL_MS', 300000),
   WATCHDOG_STALL_THRESHOLD_MS: optionalInt('WATCHDOG_STALL_THRESHOLD_MS', 600000),
   PORT: optionalInt('PORT', 3000),
-  BOT_VERSION: optional('BOT_VERSION', '0.1.7'),
+  BOT_VERSION: optional('BOT_VERSION', '0.1.8'),
 
   GMAIL_SCOPES: ['https://www.googleapis.com/auth/gmail.readonly'],
 };
